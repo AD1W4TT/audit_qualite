@@ -1,0 +1,19 @@
+# Configuration de base de données (contient des credentials)
+api/db.php
+
+# Dossier de bibliothèques tierces (à installer manuellement)
+libs/
+
+# Fichiers systèmes
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Fichiers IDE
+.idea/
+.vscode/
+*.suo
+*.user
+
+# Logs
+*.log

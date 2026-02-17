@@ -1,0 +1,122 @@
+-- cree la base (optionnel)
+CREATE DATABASE IF NOT EXISTS audit_app
+  CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+USE audit_app;
+
+-- Toujours InnoDB pour les FK
+SET NAMES utf8mb4;
+
+-- 1) Referentiels
+DROP TABLE IF EXISTS audit_resultat;
+DROP TABLE IF EXISTS audit;
+DROP TABLE IF EXISTS lignes;
+DROP TABLE IF EXISTS service;
+DROP TABLE IF EXISTS norme;
+DROP TABLE IF EXISTS utilisateur;
+
+CREATE TABLE norme (
+  id          INT AUTO_INCREMENT PRIMARY KEY,
+  code        VARCHAR(50) NOT NULL UNIQUE,         -- ex: ISO9001
+  libelle     VARCHAR(255) NOT NULL,               -- ex: ISO 9001:2015
+  description TEXT
+) ENGINE=InnoDB;
+
+CREATE TABLE service (
+  id          INT AUTO_INCREMENT PRIMARY KEY,
+  nom         VARCHAR(150) NOT NULL UNIQUE,        -- ex: Qualite, RH, Production
+  description TEXT
+) ENGINE=InnoDB;
+
+CREATE TABLE utilisateur (
+  id            INT AUTO_INCREMENT PRIMARY KEY,
+  username      VARCHAR(100) NOT NULL UNIQUE,
+  display_name  VARCHAR(150) NOT NULL,
+  password_hash VARCHAR(255) NOT NULL,
+  role          ENUM('USER','ADMIN') NOT NULL DEFAULT 'USER',
+  created_at    TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB;
+
+-- 2) Lignes = criteres (rattachees a 1 norme + 1 service)
+CREATE TABLE lignes (
+  id           INT AUTO_INCREMENT PRIMARY KEY,
+  norme_id     INT NOT NULL,
+  service_id   INT NOT NULL,
+  code         VARCHAR(50),                        -- ex: 8.5.1
+  intitule     VARCHAR(255) NOT NULL,
+  description  TEXT,
+  obligatoire  TINYINT(1) NOT NULL DEFAULT 1,     -- 1=Oui, 0=Non
+  poids        DECIMAL(6,2) DEFAULT NULL,
+  ordre        INT DEFAULT NULL,
+  CONSTRAINT fk_lignes_norme   FOREIGN KEY (norme_id)  REFERENCES norme(id)   ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT fk_lignes_service FOREIGN KEY (service_id) REFERENCES service(id) ON DELETE RESTRICT ON UPDATE CASCADE,
+  INDEX idx_lignes_norme (norme_id),
+  INDEX idx_lignes_service (service_id),
+  INDEX idx_lignes_norme_ordre (norme_id, ordre)
+) ENGINE=InnoDB;
+
+-- 3) Audit (entete)
+CREATE TABLE audit (
+  id           INT AUTO_INCREMENT PRIMARY KEY,
+  norme_id     INT NOT NULL,
+  date_audit   DATE NOT NULL,
+  auditeur     VARCHAR(150) DEFAULT NULL,
+  scope        TEXT,
+  statut       ENUM('BROUILLON','EN_COURS','CLOTURE') NOT NULL DEFAULT 'BROUILLON',
+  CONSTRAINT fk_audit_norme FOREIGN KEY (norme_id) REFERENCES norme(id) ON DELETE RESTRICT ON UPDATE CASCADE,
+  INDEX idx_audit_norme (norme_id),
+  INDEX idx_audit_statut (statut)
+) ENGINE=InnoDB;
+
+-- 4) Resultats par ligne (une ligne de resultat par (audit - ligne))
+CREATE TABLE audit_resultat (
+  id           INT AUTO_INCREMENT PRIMARY KEY,
+  audit_id     INT NOT NULL,
+  ligne_id     INT NOT NULL,
+  statut       ENUM('CONFORME','NON_CONFORME','NA','OBS') NOT NULL,
+  score        DECIMAL(5,2) DEFAULT NULL,
+  commentaire  TEXT,
+  preuve       TEXT,
+  CONSTRAINT fk_res_audit FOREIGN KEY (audit_id) REFERENCES audit(id) ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT fk_res_ligne FOREIGN KEY (ligne_id) REFERENCES lignes(id) ON DELETE RESTRICT ON UPDATE CASCADE,
+  UNIQUE KEY uk_audit_ligne (audit_id, ligne_id),
+  INDEX idx_res_audit (audit_id),
+  INDEX idx_res_ligne (ligne_id)
+) ENGINE=InnoDB;
+
+-- (Optionnel) vue pratique pour l affichage des lignes avec libelles
+DROP VIEW IF EXISTS v_lignes_detail;
+CREATE VIEW v_lignes_detail AS
+SELECT
+  l.id, l.code, l.intitule, l.obligatoire, l.poids, l.ordre,
+  n.id AS norme_id, n.code AS norme_code, n.libelle AS norme_libelle,
+  s.id AS service_id, s.nom AS service_nom
+FROM lignes l
+JOIN norme n   ON n.id = l.norme_id
+JOIN service s ON s.id = l.service_id;
+
+-- ====== Donnees d exemple (facultatif) ======
+INSERT INTO norme (code, libelle) VALUES
+('ISO9001', 'ISO 9001:2015'),
+('ISO14001', 'ISO 14001:2015');
+
+INSERT INTO service (nom) VALUES ('Qualite'), ('RH'), ('Production'), ('QSE');
+
+-- Lignes (criteres) pour ISO9001
+INSERT INTO lignes (norme_id, service_id, code, intitule, obligatoire, poids, ordre) VALUES
+(1, 1, '4.1',   'Contexte de l organisme', 1, 1.00, 1),
+(1, 2, '4.1',   'Contexte de l organisme', 1, 1.00, 1),
+(1, 3, '8.5.1', 'Maitrise de la production', 1, 2.00, 2),
+(1, 1, '8.5.1', 'Maitrise de la production', 1, 2.00, 2);
+
+-- Audit d exemple (brouillon)
+INSERT INTO audit (norme_id, date_audit, auditeur, scope, statut)
+VALUES (1, CURDATE(), 'Dupont', 'Audit interne Q1', 'BROUILLON');
+
+-- Resultats d exemple (lies a des lignes existantes)
+INSERT INTO audit_resultat (audit_id, ligne_id, statut, score, commentaire, preuve) VALUES
+(1, 1, 'CONFORME', 100, 'Rien a signaler', ''),
+(1, 3, 'NON_CONFORME', 40, 'Procedure non suivie', 'PROC-08 manquante');
+
+-- Pour creer un utilisateur, inserez dans `utilisateur` en utilisant la fonction make_password_hash()
+-- (voir api/password_helper.php). Si aucun compte n est present, un administrateur par defaut
+-- (admin / admin123) est cree lors de la premiere connexion.
