@@ -122,4 +122,9 @@ jobs:
     runs-on: [self-hosted, windows, iis-prod]
     steps:
       - shell: powershell
-        run: throw "Deploiement automatique bloque pour l'auteur ${{ needs.policy.outputs.author_login }}. Lancer manual-approve-deploy.yml avec sha=${{ github.sha }}"
+        run: |
+          Write-Warning "Deploiement automatique desactive. Validation manuelle requise."
+          $msg = "Deploiement en attente de validation manuelle. Lancer manual-approve-deploy.yml avec sha=${{ github.sha }}"
+          Write-Host $msg
+          if ($env:GITHUB_STEP_SUMMARY) { $msg | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8 }
+
