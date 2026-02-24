@@ -1,0 +1,125 @@
+﻿name: main-ci-cd
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: prod-php-${{ github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    runs-on: [self-hosted, windows, iis-prod]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Resolve PHP executable
+        shell: powershell
+        run: |
+          $candidates = @("C:\php-8.3.28-nts-Win32-vs16-x64\php.exe")
+          if (Get-Command php -ErrorAction SilentlyContinue) { $candidates += (Get-Command php).Source }
+          $candidates += @("C:\php\php.exe", "C:\Program Files\PHP\php.exe", "C:\Program Files (x86)\PHP\php.exe")
+          $phpExe = $candidates | Where-Object { $_ -and (Test-Path $_) } | Select-Object -First 1
+          if (-not $phpExe) { throw "php.exe introuvable" }
+          "PHP_EXE=$phpExe" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+      - shell: powershell
+        run: '& "$env:PHP_EXE" -v'
+      - shell: powershell
+        run: |
+          if (Test-Path composer.json) { composer install --no-interaction --prefer-dist }
+      - shell: powershell
+        run: |
+          $files = Get-ChildItem -Recurse -Filter *.php | Where-Object { $_.FullName -notmatch "\\vendor\\" }
+          foreach ($f in $files) {
+            & "$env:PHP_EXE" -l $f.FullName
+            if ($LASTEXITCODE -ne 0) { throw "Lint error: $($f.FullName)" }
+          }
+      - shell: powershell
+        run: |
+          if (Test-Path vendor/bin/phpunit) {
+            & "$env:PHP_EXE" vendor/bin/phpunit --colors=never
+          } else {
+            Write-Host "phpunit absent, tests skipped"
+          }
+
+  policy:
+    needs: verify
+    runs-on: [self-hosted, windows, iis-prod]
+    outputs:
+      author_login: ${{ steps.eval.outputs.author_login }}
+      manual_required: ${{ steps.eval.outputs.manual_required }}
+      can_deploy_auto: ${{ steps.eval.outputs.can_deploy_auto }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: resolve
+        shell: powershell
+        run: |
+          $owner = "${{ vars.OWNER_LOGIN }}"
+          if ([string]::IsNullOrWhiteSpace($owner)) { $owner = "lthibaultAdiwatt" }
+          $second = "${{ vars.SECOND_DEV_LOGIN }}"
+          if ([string]::IsNullOrWhiteSpace($second)) { $second = "Idir-zidour" }
+          "owner_login=$owner" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+          "second_login=$second" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+      - id: eval
+        shell: powershell
+        run: .\.ci\scripts\evaluate-deploy-policy.ps1 -Owner "${{ github.repository_owner }}" -Repo "${{ github.event.repository.name }}" -Sha "${{ github.sha }}" -Token "${{ github.token }}" -OwnerLogin "${{ steps.resolve.outputs.owner_login }}" -SecondDevLogin "${{ steps.resolve.outputs.second_login }}"
+
+  deploy_auto:
+    needs: policy
+    if: needs.policy.outputs.can_deploy_auto == 'true'
+    runs-on: [self-hosted, windows, iis-prod]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Ensure age binary
+        shell: powershell
+        run: |
+          if (Get-Command age -ErrorAction SilentlyContinue) { exit 0 }
+          $candidates = @("\\foadsysdev1p\CI\actions-runner\tools\age\age.exe", "D:\CI\actions-runner\tools\age\age.exe", "C:\CI\actions-runner\tools\age\age.exe")
+          $ageExe = $candidates | Where-Object { Test-Path $_ } | Select-Object -First 1
+          if (-not $ageExe) { throw "age.exe introuvable" }
+          (Split-Path -Parent $ageExe) | Out-File -FilePath $env:GITHUB_PATH -Append -Encoding utf8
+      - name: Resolve AGE key path
+        shell: powershell
+        run: |
+          if (-not [string]::IsNullOrWhiteSpace($env:AGE_KEY_FILE) -and (Test-Path $env:AGE_KEY_FILE)) { exit 0 }
+          $candidates = @("C:\CI\actions-runner\keys\cicd-runner-20260223.key", "\\foadsysdev1p\CI\actions-runner\keys\cicd-runner-20260223.key")
+          foreach ($c in $candidates) {
+            if (Test-Path $c) { "AGE_KEY_FILE=$c" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8; exit 0 }
+          }
+          throw "AGE key introuvable"
+      - name: Resolve target paths
+        shell: powershell
+        run: |
+          $prod = "${{ vars.PROD_PATH }}"
+          if ([string]::IsNullOrWhiteSpace($prod)) { throw "Variable PROD_PATH obligatoire" }
+          $bak = "${{ vars.PROD_BACKUP_PATH }}"
+          if ([string]::IsNullOrWhiteSpace($bak)) { throw "Variable PROD_BACKUP_PATH obligatoire" }
+          "DEPLOY_TARGET=$prod" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          "DEPLOY_BACKUP=$bak" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+      - name: Stage files
+        shell: powershell
+        run: |
+          $stage = Join-Path $env:RUNNER_TEMP "php-stage-prod"
+          if (Test-Path $stage) { Remove-Item $stage -Recurse -Force }
+          New-Item -ItemType Directory -Path $stage -Force | Out-Null
+          robocopy "$env:GITHUB_WORKSPACE" "$stage" /MIR /XD .git .github .ci tests .vscode .idea /XF .gitignore README.md
+          $rc = $LASTEXITCODE
+          if ($rc -ge 8) { throw "Staging robocopy error code $rc" }
+          $global:LASTEXITCODE = 0
+          if (Test-Path ".\.ci\secrets\database.php.age") { .\.ci\scripts\decrypt-age.ps1 -InputFile ".\.ci\secrets\database.php.age" -OutputFile "$stage\config\database.php" }
+          if (Test-Path ".\.ci\secrets\db.php.age") { .\.ci\scripts\decrypt-age.ps1 -InputFile ".\.ci\secrets\db.php.age" -OutputFile "$stage\api\db.php" }
+          if (Test-Path ".\.ci\secrets\config.php.age") { .\.ci\scripts\decrypt-age.ps1 -InputFile ".\.ci\secrets\config.php.age" -OutputFile "$stage\api\config.php" }
+          "STAGE_PATH=$stage" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+      - shell: powershell
+        run: .\.ci\scripts\deploy-iis.ps1 -Source "$env:STAGE_PATH" -Target "$env:DEPLOY_TARGET" -BackupRoot "$env:DEPLOY_BACKUP" -UseAppOffline
+
+  block_manual:
+    needs: policy
+    if: needs.policy.outputs.can_deploy_auto != 'true'
+    runs-on: [self-hosted, windows, iis-prod]
+    steps:
+      - shell: powershell
+        run: throw "Deploiement automatique bloque pour l'auteur ${{ needs.policy.outputs.author_login }}. Lancer manual-approve-deploy.yml avec sha=${{ github.sha }}"
