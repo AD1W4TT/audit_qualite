@@ -47,6 +47,7 @@ jobs:
 
   deploy:
     needs: verify
+    if: github.actor == 'github-actions[bot]'
     runs-on: [self-hosted, windows, iis-prod]
     steps:
       - uses: actions/checkout@v4
@@ -92,3 +93,15 @@ jobs:
           "STAGE_PATH=$stage" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
       - shell: powershell
         run: .\.ci\scripts\deploy-iis.ps1 -Source "$env:STAGE_PATH" -Target "$env:DEPLOY_TARGET" -BackupRoot "$env:DEPLOY_BACKUP" -UseAppOffline
+
+  non_promoted_notice:
+    needs: verify
+    if: github.actor != 'github-actions[bot]'
+    runs-on: [self-hosted, windows, iis-prod]
+    steps:
+      - shell: powershell
+        run: |
+          Write-Warning "Push direct sur main detecte: deploiement bloque."
+          $msg = "Aucun deploiement prod sans workflow promote-to-main.yml (acteur attendu: github-actions[bot])."
+          Write-Host $msg
+          if ($env:GITHUB_STEP_SUMMARY) { $msg | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8 }

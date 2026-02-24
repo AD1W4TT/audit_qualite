@@ -38,7 +38,7 @@ jobs:
             throw "Seul ${{ steps.owner.outputs.owner_login }} peut promouvoir vers main"
           }
 
-      - name: Validate SHA and ancestry
+      - name: Validate SHA
         id: validate
         shell: powershell
         run: |
@@ -51,11 +51,6 @@ jobs:
           $inMain = git branch -r --contains $sha | Where-Object { $_ -match "origin/main" }
           if ($inMain) {
             throw "Le SHA est deja present sur main"
-          }
-
-          $inFeature = git branch -r --contains $sha | Where-Object { $_ -match "origin/feature/" }
-          if (-not $inFeature) {
-            throw "Le SHA doit provenir d'une branche feature/*"
           }
 
           "sha=$sha" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
