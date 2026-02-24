@@ -1,0 +1,95 @@
+﻿name: deploy-dev-php
+on:
+  push:
+    branches:
+      - "feature/**"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-dev-php-${{ github.ref_name }}
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: [self-hosted, windows, iis-prod]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Ensure age binary
+        shell: pwsh
+        run: |
+          if (Get-Command age -ErrorAction SilentlyContinue) {
+            Write-Host "age already available"
+            exit 0
+          }
+          $release = Invoke-RestMethod -Uri "https://api.github.com/repos/FiloSottile/age/releases/latest"
+          $asset = $release.assets | Where-Object { $_.name -match "windows-amd64\.zip$" } | Select-Object -First 1
+          if (-not $asset) { throw "age windows asset introuvable" }
+          $zip = Join-Path $env:RUNNER_TEMP "age-windows-amd64.zip"
+          $dst = Join-Path $env:RUNNER_TEMP "age-bin"
+          Invoke-WebRequest -Uri $asset.browser_download_url -OutFile $zip
+          Expand-Archive -Path $zip -DestinationPath $dst -Force
+          $ageDir = Split-Path -Parent (Get-ChildItem -Path $dst -Recurse -Filter age.exe | Select-Object -First 1 -ExpandProperty FullName)
+          if (-not $ageDir) { throw "age.exe introuvable apres extraction" }
+          $ageDir | Out-File -FilePath $env:GITHUB_PATH -Append -Encoding utf8
+      - name: Resolve AGE key path
+        shell: pwsh
+        run: |
+          if (-not [string]::IsNullOrWhiteSpace($env:AGE_KEY_FILE) -and (Test-Path $env:AGE_KEY_FILE)) {
+            Write-Host "AGE_KEY_FILE already set"
+            exit 0
+          }
+
+          $candidates = @(
+            "C:\CI\actions-runner\keys\cicd-runner-20260223.key",
+            "\\foadsysdev1p\CI\actions-runner\keys\cicd-runner-20260223.key"
+          )
+
+          foreach ($c in $candidates) {
+            if (Test-Path $c) {
+              "AGE_KEY_FILE=$c" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+              Write-Host "Using AGE key: $c"
+              exit 0
+            }
+          }
+
+          throw "AGE key introuvable. Definir AGE_KEY_FILE ou placer la cle dans C:\CI\actions-runner\keys"
+      - name: Resolve target paths
+        shell: pwsh
+        run: |
+          $repo = "${{ github.event.repository.name }}"
+          $dev = "${{ vars.DEV_PATH }}"
+          if ([string]::IsNullOrWhiteSpace($dev)) { throw "Variable GitHub DEV_PATH obligatoire (chemin IIS deja configure)" }
+          $bak = "${{ vars.DEV_BACKUP_PATH }}"
+          if ([string]::IsNullOrWhiteSpace($bak)) { throw "Variable GitHub DEV_BACKUP_PATH obligatoire" }
+          "DEPLOY_TARGET=$dev" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          "DEPLOY_BACKUP=$bak" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
+      - name: Stage files
+        shell: pwsh
+        run: |
+          $stage = Join-Path $env:RUNNER_TEMP "php-stage-dev"
+          if (Test-Path $stage) { Remove-Item $stage -Recurse -Force }
+          New-Item -ItemType Directory -Path $stage -Force | Out-Null
+
+          robocopy "$env:GITHUB_WORKSPACE" "$stage" /MIR /XD .git .github .ci tests .vscode .idea /XF .gitignore README.md
+          if ($LASTEXITCODE -ge 8) { throw "Staging robocopy error code $LASTEXITCODE" }
+
+          if (Test-Path ".\.ci\secrets\database.php.age") {
+            .\.ci\scripts\decrypt-age.ps1 -InputFile ".\.ci\secrets\database.php.age" -OutputFile "$stage\config\database.php"
+          }
+          if (Test-Path ".\.ci\secrets\db.php.age") {
+            .\.ci\scripts\decrypt-age.ps1 -InputFile ".\.ci\secrets\db.php.age" -OutputFile "$stage\api\db.php"
+          }
+          if (Test-Path ".\.ci\secrets\config.php.age") {
+            .\.ci\scripts\decrypt-age.ps1 -InputFile ".\.ci\secrets\config.php.age" -OutputFile "$stage\api\config.php"
+          }
+
+          "STAGE_PATH=$stage" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
+      - shell: pwsh
+        run: .\.ci\scripts\deploy-iis.ps1 -Source "$env:STAGE_PATH" -Target "$env:DEPLOY_TARGET" -BackupRoot "$env:DEPLOY_BACKUP" -UseAppOffline
+
+
+
