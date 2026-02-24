@@ -1,4 +1,4 @@
--- cree la base (optionnel)
+-- crée la base (optionnel)
 CREATE DATABASE IF NOT EXISTS audit_app
   CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 USE audit_app;
@@ -6,13 +6,12 @@ USE audit_app;
 -- Toujours InnoDB pour les FK
 SET NAMES utf8mb4;
 
--- 1) Referentiels
+-- 1) Référentiels
 DROP TABLE IF EXISTS audit_resultat;
 DROP TABLE IF EXISTS audit;
 DROP TABLE IF EXISTS lignes;
 DROP TABLE IF EXISTS service;
 DROP TABLE IF EXISTS norme;
-DROP TABLE IF EXISTS utilisateur;
 
 CREATE TABLE norme (
   id          INT AUTO_INCREMENT PRIMARY KEY,
@@ -23,20 +22,11 @@ CREATE TABLE norme (
 
 CREATE TABLE service (
   id          INT AUTO_INCREMENT PRIMARY KEY,
-  nom         VARCHAR(150) NOT NULL UNIQUE,        -- ex: Qualite, RH, Production
+  nom         VARCHAR(150) NOT NULL UNIQUE,        -- ex: Qualité, RH, Production
   description TEXT
 ) ENGINE=InnoDB;
 
-CREATE TABLE utilisateur (
-  id            INT AUTO_INCREMENT PRIMARY KEY,
-  username      VARCHAR(100) NOT NULL UNIQUE,
-  display_name  VARCHAR(150) NOT NULL,
-  password_hash VARCHAR(255) NOT NULL,
-  role          ENUM('USER','ADMIN') NOT NULL DEFAULT 'USER',
-  created_at    TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
-) ENGINE=InnoDB;
-
--- 2) Lignes = criteres (rattachees a 1 norme + 1 service)
+-- 2) Lignes = critères (rattachées à 1 norme + 1 service)
 CREATE TABLE lignes (
   id           INT AUTO_INCREMENT PRIMARY KEY,
   norme_id     INT NOT NULL,
@@ -54,7 +44,7 @@ CREATE TABLE lignes (
   INDEX idx_lignes_norme_ordre (norme_id, ordre)
 ) ENGINE=InnoDB;
 
--- 3) Audit (entete)
+-- 3) Audit (entête)
 CREATE TABLE audit (
   id           INT AUTO_INCREMENT PRIMARY KEY,
   norme_id     INT NOT NULL,
@@ -67,7 +57,7 @@ CREATE TABLE audit (
   INDEX idx_audit_statut (statut)
 ) ENGINE=InnoDB;
 
--- 4) Resultats par ligne (une ligne de resultat par (audit - ligne))
+-- 4) Résultats par ligne (une ligne de résultat par (audit × ligne))
 CREATE TABLE audit_resultat (
   id           INT AUTO_INCREMENT PRIMARY KEY,
   audit_id     INT NOT NULL,
@@ -83,7 +73,7 @@ CREATE TABLE audit_resultat (
   INDEX idx_res_ligne (ligne_id)
 ) ENGINE=InnoDB;
 
--- (Optionnel) vue pratique pour l affichage des lignes avec libelles
+-- (Optionnel) vue pratique pour l’affichage des lignes avec libellés
 DROP VIEW IF EXISTS v_lignes_detail;
 CREATE VIEW v_lignes_detail AS
 SELECT
@@ -94,29 +84,26 @@ FROM lignes l
 JOIN norme n   ON n.id = l.norme_id
 JOIN service s ON s.id = l.service_id;
 
--- ====== Donnees d exemple (facultatif) ======
+-- ====== Données d’exemple (facultatif) ======
 INSERT INTO norme (code, libelle) VALUES
 ('ISO9001', 'ISO 9001:2015'),
 ('ISO14001', 'ISO 14001:2015');
 
-INSERT INTO service (nom) VALUES ('Qualite'), ('RH'), ('Production'), ('QSE');
+INSERT INTO service (nom) VALUES ('Qualité'), ('RH'), ('Production'), ('QSE');
 
--- Lignes (criteres) pour ISO9001
+-- Lignes (critères) pour ISO9001
 INSERT INTO lignes (norme_id, service_id, code, intitule, obligatoire, poids, ordre) VALUES
-(1, 1, '4.1',   'Contexte de l organisme', 1, 1.00, 1),
-(1, 2, '4.1',   'Contexte de l organisme', 1, 1.00, 1),
-(1, 3, '8.5.1', 'Maitrise de la production', 1, 2.00, 2),
-(1, 1, '8.5.1', 'Maitrise de la production', 1, 2.00, 2);
+(1, 1, '4.1',   'Contexte de l’organisme', 1, 1.00, 1),
+(1, 2, '4.1',   'Contexte de l’organisme', 1, 1.00, 1),
+(1, 3, '8.5.1', 'Maîtrise de la production', 1, 2.00, 2),
+(1, 1, '8.5.1', 'Maîtrise de la production', 1, 2.00, 2);
 
--- Audit d exemple (brouillon)
+-- Audit d’exemple (brouillon)
 INSERT INTO audit (norme_id, date_audit, auditeur, scope, statut)
 VALUES (1, CURDATE(), 'Dupont', 'Audit interne Q1', 'BROUILLON');
 
--- Resultats d exemple (lies a des lignes existantes)
+-- Résultats d’exemple (liés à des lignes existantes)
 INSERT INTO audit_resultat (audit_id, ligne_id, statut, score, commentaire, preuve) VALUES
-(1, 1, 'CONFORME', 100, 'Rien a signaler', ''),
-(1, 3, 'NON_CONFORME', 40, 'Procedure non suivie', 'PROC-08 manquante');
+(1, 1, 'CONFORME', 100, 'Rien à signaler', ''),
+(1, 3, 'NON_CONFORME', 40, 'Procédure non suivie', 'PROC-08 manquante');
 
--- Pour creer un utilisateur, inserez dans `utilisateur` en utilisant la fonction make_password_hash()
--- (voir api/password_helper.php). Si aucun compte n est present, un administrateur par defaut
--- (admin / admin123) est cree lors de la premiere connexion.
