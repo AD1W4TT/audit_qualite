@@ -22,7 +22,7 @@ $headers = @{
   Authorization = "Bearer $Token"
   Accept = "application/vnd.github+json"
   "X-GitHub-Api-Version" = "2022-11-28"
-  "User-Agent" = "cicd-author-policy"
+  "User-Agent" = "cicd-manual-policy"
 }
 
 function Invoke-GitHubApi {
@@ -40,23 +40,14 @@ function Invoke-GitHubApi {
 }
 
 $commit = Invoke-GitHubApi -Uri "https://api.github.com/repos/$Owner/$Repo/commits/$Sha"
-$authorLogin = $null
+$authorLogin = "unknown"
 if ($commit.author -and $commit.author.login) {
   $authorLogin = [string]$commit.author.login
 }
-if ([string]::IsNullOrWhiteSpace($authorLogin)) { $authorLogin = "unknown" }
 
 $canDeployAuto = $false
 $manualRequired = $true
-$policy = "manual"
-if ($authorLogin -eq $OwnerLogin) {
-  $canDeployAuto = $true
-  $manualRequired = $false
-  $policy = "auto"
-}
-elseif ($authorLogin -eq $SecondDevLogin) {
-  $policy = "manual-owner-approval"
-}
+$policy = "manual-all"
 
 Write-Host "Policy=$policy | Author=$authorLogin | Auto=$canDeployAuto"
 
