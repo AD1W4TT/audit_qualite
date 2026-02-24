@@ -1,13 +1,16 @@
-﻿CI/CD production manual validation policy
+﻿CI/CD production policy (no PR)
 
-Rule on main
-- Every commit on main requires manual validation before production deployment.
-- Automatic deployment from push is disabled for all authors.
-- Deployment must be triggered via .github/workflows/manual-approve-deploy.yml.
+Rule
+- No PR flow.
+- Validation is manual before main through .github/workflows/promote-to-main.yml.
+- Push on main triggers technical verify + production deployment.
 
-Current approver restriction
-- Manual deployment remains restricted to lthibaultAdiwatt in workflow checks.
+Release flow
+1. Developer pushes to feature/*.
+2. lthibaultAdiwatt runs promote-to-main.yml with a SHA.
+3. Workflow verifies actor + SHA and fast-forwards main.
+4. main-ci-cd.yml runs verify then deploy to production.
 
-Workflows
-- .github/workflows/main-ci-cd.yml
-- .github/workflows/manual-approve-deploy.yml
+Rollback
+- Technical rollback is automatic in deploy-iis.ps1 on deployment failure.
+- No post-success rollback workflow is provided.

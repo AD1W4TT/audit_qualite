@@ -45,31 +45,8 @@ jobs:
             Write-Host "phpunit absent, tests skipped"
           }
 
-  policy:
+  deploy:
     needs: verify
-    runs-on: [self-hosted, windows, iis-prod]
-    outputs:
-      author_login: ${{ steps.eval.outputs.author_login }}
-      manual_required: ${{ steps.eval.outputs.manual_required }}
-      can_deploy_auto: ${{ steps.eval.outputs.can_deploy_auto }}
-    steps:
-      - uses: actions/checkout@v4
-      - id: resolve
-        shell: powershell
-        run: |
-          $owner = "${{ vars.OWNER_LOGIN }}"
-          if ([string]::IsNullOrWhiteSpace($owner)) { $owner = "lthibaultAdiwatt" }
-          $second = "${{ vars.SECOND_DEV_LOGIN }}"
-          if ([string]::IsNullOrWhiteSpace($second)) { $second = "Idir-zidour" }
-          "owner_login=$owner" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
-          "second_login=$second" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
-      - id: eval
-        shell: powershell
-        run: .\.ci\scripts\evaluate-deploy-policy.ps1 -Owner "${{ github.repository_owner }}" -Repo "${{ github.event.repository.name }}" -Sha "${{ github.sha }}" -Token "${{ github.token }}" -OwnerLogin "${{ steps.resolve.outputs.owner_login }}" -SecondDevLogin "${{ steps.resolve.outputs.second_login }}"
-
-  deploy_auto:
-    needs: policy
-    if: needs.policy.outputs.can_deploy_auto == 'true'
     runs-on: [self-hosted, windows, iis-prod]
     steps:
       - uses: actions/checkout@v4
@@ -115,16 +92,3 @@ jobs:
           "STAGE_PATH=$stage" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
       - shell: powershell
         run: .\.ci\scripts\deploy-iis.ps1 -Source "$env:STAGE_PATH" -Target "$env:DEPLOY_TARGET" -BackupRoot "$env:DEPLOY_BACKUP" -UseAppOffline
-
-  block_manual:
-    needs: policy
-    if: needs.policy.outputs.can_deploy_auto != 'true'
-    runs-on: [self-hosted, windows, iis-prod]
-    steps:
-      - shell: powershell
-        run: |
-          Write-Warning "Deploiement automatique desactive. Validation manuelle requise."
-          $msg = "Deploiement en attente de validation manuelle. Lancer manual-approve-deploy.yml avec sha=${{ github.sha }}"
-          Write-Host $msg
-          if ($env:GITHUB_STEP_SUMMARY) { $msg | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8 }
-
