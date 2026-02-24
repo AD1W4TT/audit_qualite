@@ -14,3 +14,5 @@ Release flow
 Rollback
 - Technical rollback is automatic in deploy-iis.ps1 on deployment failure.
 - No post-success rollback workflow is provided.
+
+Test promote trigger 2026-02-24 17:34:32
