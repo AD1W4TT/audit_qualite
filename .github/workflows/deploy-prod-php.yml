@@ -25,7 +25,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Ensure age binary
-        shell: pwsh
+        shell: powershell
         run: |
           if (Get-Command age -ErrorAction SilentlyContinue) {
             Write-Host "age already available"
@@ -42,7 +42,7 @@ jobs:
           if (-not $ageDir) { throw "age.exe introuvable apres extraction" }
           $ageDir | Out-File -FilePath $env:GITHUB_PATH -Append -Encoding utf8
       - name: Resolve AGE key path
-        shell: pwsh
+        shell: powershell
         run: |
           if (-not [string]::IsNullOrWhiteSpace($env:AGE_KEY_FILE) -and (Test-Path $env:AGE_KEY_FILE)) {
             Write-Host "AGE_KEY_FILE already set"
@@ -64,7 +64,7 @@ jobs:
 
           throw "AGE key introuvable. Definir AGE_KEY_FILE ou placer la cle dans C:\CI\actions-runner\keys"
       - name: Resolve target paths
-        shell: pwsh
+        shell: powershell
         run: |
           $repo = "${{ github.event.repository.name }}"
           $prod = "${{ vars.PROD_PATH }}"
@@ -75,7 +75,7 @@ jobs:
           "DEPLOY_BACKUP=$bak" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
 
       - name: Stage files
-        shell: pwsh
+        shell: powershell
         run: |
           $stage = Join-Path $env:RUNNER_TEMP "php-stage-prod"
           if (Test-Path $stage) { Remove-Item $stage -Recurse -Force }
@@ -98,6 +98,7 @@ jobs:
 
       - shell: pwsh
         run: .\.ci\scripts\deploy-iis.ps1 -Source "$env:STAGE_PATH" -Target "$env:DEPLOY_TARGET" -BackupRoot "$env:DEPLOY_BACKUP" -UseAppOffline
+
 
 
 

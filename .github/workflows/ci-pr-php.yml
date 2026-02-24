@@ -13,7 +13,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Resolve PHP executable
-        shell: pwsh
+        shell: powershell
         run: |
           $candidates = @(
             "C:\php-8.3.30-nts-Win32-vs16-x64\php.exe"
@@ -60,4 +60,5 @@ jobs:
           } else {
             Write-Host "phpunit absent, tests skipped"
           }
+
 
