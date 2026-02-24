@@ -34,7 +34,7 @@ $currentUser = !empty($_SESSION['display_name'])
     </header>
 
     <section class="panel">
-      <h2>Lancer un audit qualité</h2>
+      <h2>Lancer un audit</h2>
       <div class="grid-3">
         <div>
           <label>Norme</label>
