@@ -25,6 +25,18 @@ $headers = @{
   "User-Agent" = "cicd-pr-gate"
 }
 
+function Get-PropValue {
+  param(
+    [Parameter(Mandatory=$true)][AllowNull()][object]$Object,
+    [Parameter(Mandatory=$true)][string]$Name
+  )
+
+  if ($null -eq $Object) { return $null }
+  $prop = $Object.PSObject.Properties[$Name]
+  if ($null -eq $prop) { return $null }
+  return $prop.Value
+}
+
 function Invoke-GitHubApi {
   param(
     [Parameter(Mandatory=$true)][string]$Uri
@@ -48,23 +60,42 @@ function Invoke-GitHubApi {
 }
 
 $prs = @(Invoke-GitHubApi -Uri "https://api.github.com/repos/$Owner/$Repo/commits/$Sha/pulls?per_page=100")
-if (-not $prs -or $prs.Count -eq 0) { throw "Commit $Sha sur main non lie a une PR. Deploiement refuse." }
+if (-not $prs -or $prs.Count -eq 0) {
+  throw "Commit $Sha sur main non lie a une PR. Deploiement refuse."
+}
 
-$pr = $prs | Where-Object { $_.merged_at } | Select-Object -First 1
+$pr = $prs | Where-Object { -not [string]::IsNullOrWhiteSpace((Get-PropValue -Object $_ -Name 'merged_at')) } | Select-Object -First 1
 if (-not $pr) { throw "Aucune PR mergee associee au commit $Sha." }
 
-$reviews = @(Invoke-GitHubApi -Uri "https://api.github.com/repos/$Owner/$Repo/pulls/$($pr.number)/reviews?per_page=100")
+$prNumber = Get-PropValue -Object $pr -Name 'number'
+if ($null -eq $prNumber) { throw "Numero de PR introuvable dans la reponse GitHub." }
+
+$prUser = Get-PropValue -Object $pr -Name 'user'
+$prAuthor = Get-PropValue -Object $prUser -Name 'login'
+
+$reviews = @(Invoke-GitHubApi -Uri "https://api.github.com/repos/$Owner/$Repo/pulls/$prNumber/reviews?per_page=100")
+
+if ($reviews.Count -eq 1) {
+  $msg = Get-PropValue -Object $reviews[0] -Name 'message'
+  $stateProbe = Get-PropValue -Object $reviews[0] -Name 'state'
+  if (-not [string]::IsNullOrWhiteSpace($msg) -and [string]::IsNullOrWhiteSpace($stateProbe)) {
+    throw "Reponse reviews GitHub inattendue: $msg"
+  }
+}
 
 $approvers = @{}
 foreach ($review in $reviews) {
-  if ($review.state -eq "APPROVED" -and $review.user.login -ne $pr.user.login) {
-    $approvers[$review.user.login] = $true
+  $state = Get-PropValue -Object $review -Name 'state'
+  $reviewUser = Get-PropValue -Object $review -Name 'user'
+  $reviewer = Get-PropValue -Object $reviewUser -Name 'login'
+
+  if ($state -eq "APPROVED" -and -not [string]::IsNullOrWhiteSpace($reviewer) -and $reviewer -ne $prAuthor) {
+    $approvers[$reviewer] = $true
   }
 }
 
 if ($approvers.Count -lt $MinApprovals) {
-  throw "PR #$($pr.number) sans approbation externe suffisante (minimum=$MinApprovals)."
+  throw "PR #$prNumber sans approbation externe suffisante (minimum=$MinApprovals)."
 }
 
-Write-Host "Gate OK: PR #$($pr.number), approbateurs: $($approvers.Keys -join ', ')"
-
+Write-Host "Gate OK: PR #$prNumber, approbateurs: $($approvers.Keys -join ', ')"
