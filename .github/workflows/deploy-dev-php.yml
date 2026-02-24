@@ -78,7 +78,10 @@ jobs:
           New-Item -ItemType Directory -Path $stage -Force | Out-Null
 
           robocopy "$env:GITHUB_WORKSPACE" "$stage" /MIR /XD .git .github .ci tests .vscode .idea /XF .gitignore README.md
-          if ($LASTEXITCODE -ge 8) { throw "Staging robocopy error code $LASTEXITCODE" }
+          $rc = $LASTEXITCODE
+          if ($rc -ge 8) { throw "Staging robocopy error code $rc" }
+          if ($rc -ge 1) { Write-Host "Staging robocopy completed with warnings/code $rc" }
+          $global:LASTEXITCODE = 0
 
           if (Test-Path ".\.ci\secrets\database.php.age") {
             .\.ci\scripts\decrypt-age.ps1 -InputFile ".\.ci\secrets\database.php.age" -OutputFile "$stage\config\database.php"
@@ -94,6 +97,7 @@ jobs:
 
       - shell: powershell
         run: .\.ci\scripts\deploy-iis.ps1 -Source "$env:STAGE_PATH" -Target "$env:DEPLOY_TARGET" -BackupRoot "$env:DEPLOY_BACKUP" -UseAppOffline
+
 
 
 
