@@ -16,7 +16,7 @@ jobs:
         shell: powershell
         run: |
           $candidates = @(
-            "C:\php-8.3.30-nts-Win32-vs16-x64\php.exe"
+            "C:\php-8.3.28-nts-Win32-vs16-x64\php.exe"
           )
 
           if (Get-Command php -ErrorAction SilentlyContinue) {
@@ -60,5 +60,6 @@ jobs:
           } else {
             Write-Host "phpunit absent, tests skipped"
           }
+
 
 
