@@ -3,19 +3,25 @@
 on:
   push:
     branches: [main]
+  workflow_run:
+    workflows: ["promote-to-main"]
+    types: [completed]
 
 permissions:
   contents: read
 
 concurrency:
-  group: prod-php-${{ github.ref_name }}
+  group: prod-php-${{ github.ref_name || github.run_id }}
   cancel-in-progress: false
 
 jobs:
   verify:
+    if: github.event_name == 'push' || (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success')
     runs-on: [self-hosted, windows, iis-prod]
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: main
       - name: Resolve PHP executable
         shell: powershell
         run: |
@@ -47,10 +53,12 @@ jobs:
 
   deploy:
     needs: verify
-    if: github.actor == 'github-actions[bot]'
+    if: github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success'
     runs-on: [self-hosted, windows, iis-prod]
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: main
       - name: Ensure age binary
         shell: powershell
         run: |
@@ -96,12 +104,12 @@ jobs:
 
   non_promoted_notice:
     needs: verify
-    if: github.actor != 'github-actions[bot]'
+    if: github.event_name == 'push' && github.actor != 'github-actions[bot]'
     runs-on: [self-hosted, windows, iis-prod]
     steps:
       - shell: powershell
         run: |
           Write-Warning "Push direct sur main detecte: deploiement bloque."
-          $msg = "Aucun deploiement prod sans workflow promote-to-main.yml (acteur attendu: github-actions[bot])."
+          $msg = "Aucun deploiement prod sans workflow promote-to-main.yml."
           Write-Host $msg
           if ($env:GITHUB_STEP_SUMMARY) { $msg | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8 }
