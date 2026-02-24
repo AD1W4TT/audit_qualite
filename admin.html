@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Admin — Audits & Référentiels</title>
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <h1>Administration</h1>
+      <span class="chip">v6 — onglets</span>
+      <a class="btn btn-ghost header-admin" href="index.html">↩ Retour</a>
+    </header>
+
+    <!-- NAV TABS -->
+    <nav class="tabs">
+      <button class="tab active" data-tab="tab-audits">Audits</button>
+      <button class="tab" data-tab="tab-ref">Référentiels</button>
+    </nav>
+
+    <!-- TAB: AUDITS -->
+    <section id="tab-audits" class="panel tab-panel active">
+      <div class="row-between">
+        <h2>Audits</h2>
+        <div class="toolbar">
+          <button id="btnRefreshAudits" class="btn">Rafraîchir</button>
+        </div>
+      </div>
+      <div id="auditList" class="table-wrap">
+        <div class="empty">Aucun audit à afficher.</div>
+      </div>
+      <div class="hint">Règle : un audit <b>finalisé</b> n’est plus modifiable.</div>
+    </section>
+
+    <!-- TAB: REFERENTIELS -->
+    <section id="tab-ref" class="panel tab-panel">
+      <!-- Sous-onglets -->
+      <nav class="subtabs">
+        <button class="subtab active" data-subtab="sub-normes">Normes</button>
+        <button class="subtab" data-subtab="sub-services">Services</button>
+        <button class="subtab" data-subtab="sub-lignes">Lignes</button>
+      </nav>
+
+      <div id="sub-normes" class="subpanel active">
+        <h3>Nouvelle norme</h3>
+        <div class="grid-3 ref-form">
+          <div>
+            <label>Code</label>
+            <input id="n_code" type="text" placeholder="ISO9001" />
+          </div>
+          <div>
+            <label>Libellé</label>
+            <input id="n_libelle" type="text" placeholder="ISO 9001:2015" />
+          </div>
+          <div style="display:flex;align-items:end">
+            <button id="btnAddNorme" class="btn btn-accent" style="width:100%">Ajouter</button>
+          </div>
+        </div>
+      </div>
+
+      <div id="sub-services" class="subpanel">
+        <h3>Nouveau service</h3>
+        <div class="grid-3 ref-form" style="grid-template-columns: 1fr 240px 1fr;">
+          <div>
+            <label>Nom</label>
+            <input id="s_nom" type="text" placeholder="Qualité" />
+          </div>
+          <div style="display:flex;align-items:end">
+            <button id="btnAddService" class="btn btn-accent" style="width:100%">Ajouter</button>
+          </div>
+          <div class="hint" style="align-self:end">Astuce : garde des noms courts (ex. RH, QSE…)</div>
+        </div>
+      </div>
+
+      <div id="sub-lignes" class="subpanel">
+        <h3>Nouvelle ligne (critère)</h3>
+        <div class="grid-3 ref-form">
+          <div>
+            <label>Norme</label>
+            <select id="l_norme"></select>
+          </div>
+          <div>
+            <label>Service</label>
+            <select id="l_service"></select>
+          </div>
+          <div>
+            <label>Code</label>
+            <input id="l_code" type="text" placeholder="8.5.1" />
+          </div>
+        </div>
+
+        <div class="grid-3 ref-form">
+          <div>
+            <label>Intitulé</label>
+            <input id="l_intitule" type="text" placeholder="Maîtrise de la production" />
+          </div>
+          <div>
+            <label>Obligatoire</label>
+            <select id="l_obl">
+              <option value="1" selected>Oui</option>
+              <option value="0">Non</option>
+            </select>
+          </div>
+          <div>
+            <label>Poids</label>
+            <input id="l_poids" type="number" step="0.01" placeholder="1.00" />
+          </div>
+        </div>
+
+        <div class="grid-3 ref-form" style="grid-template-columns: 1fr 1fr 240px;">
+          <div>
+            <label>Ordre</label>
+            <input id="l_ordre" type="number" placeholder="1" />
+          </div>
+          <div></div>
+          <div style="display:flex;align-items:end">
+            <button id="btnAddLigne" class="btn btn-accent" style="width:100%">Ajouter</button>
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <script src="js/admin.js"></script>
+</body>
+</html>

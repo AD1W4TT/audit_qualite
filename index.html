@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Audit — v5 (lecture BD locale)</title>
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <h1>Audits internes</h1>
+      <span class="chip">v5 — lecture MySQL (UwAmp)</span>
+      <a class="btn btn-ghost header-admin" href="admin.html" title="Panneau Admin">Admin</a>
+    </header>
+
+    <!-- Sélection norme & services -->
+    <section class="panel">
+      <h2>Sélection</h2>
+      <div class="grid-3">
+        <div>
+          <label for="normeSelect">Norme</label>
+          <select id="normeSelect" aria-label="Sélection de la norme">
+            <option value="">— Sélectionner une norme —</option>
+          </select>
+        </div>
+        <div>
+          <label for="serviceSelect">Services (optionnel — multi)</label>
+          <select id="serviceSelect" class="compact-select" multiple size="3" aria-label="Sélection des services" disabled></select>
+          <div class="hint">Astuce : Ctrl/Cmd + clic pour multi-sélection</div>
+        </div>
+        <div class="tools-col">
+          <button id="btnRefresh" class="btn">Rafraîchir</button>
+          <button id="btnSelectAllServices" class="btn" disabled>Services : tout</button>
+          <button id="btnClearServices" class="btn" disabled>Services : aucun</button>
+        </div>
+      </div>
+      <div class="footer">Le tableau ci-dessous est <b>vide au départ</b> et s’alimente quand une norme est choisie (et éventuellement des services).</div>
+    </section>
+
+    <!-- Lignes (lecture depuis BD) -->
+    <section class="panel">
+      <div class="row-between">
+        <h2>Lignes (critères)</h2>
+        <div class="toolbar">
+          <button id="btnSelectAllRows" class="btn" disabled>Tout cocher</button>
+          <button id="btnClearRows" class="btn" disabled>Tout décocher</button>
+          <button id="btnGenerate" class="btn btn-accent" disabled>Générer l’audit</button>
+        </div>
+      </div>
+      <div id="lignesContainer" class="table-wrap">
+        <div class="empty">En attente de sélection…</div>
+      </div>
+    </section>
+
+    <!-- Audit généré (sans écriture BD pour l’instant) -->
+    <section id="auditSection" class="panel" style="display:none;">
+      <div class="row-between">
+        <h2>Audit en cours</h2>
+        <div class="toolbar">
+          <button id="btnCancelAudit" class="btn">Annuler</button>
+          <button id="btnSaveAudit" class="btn btn-accent">Enregistrer (local)</button>
+        </div>
+      </div>
+      <div id="auditMeta" class="badge"></div>
+      <div id="auditTable" class="table-wrap"></div>
+      <div class="footer">Ici on <b>ne sauvegarde pas encore en BD</b>. On simulera via <code>localStorage</code> pour tester l’UI.</div>
+    </section>
+  </div>
+
+  <script src="js/app.js"></script>
+</body>
+</html>
