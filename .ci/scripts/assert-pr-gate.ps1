@@ -4,7 +4,8 @@ param(
   [Parameter(Mandatory=$true)][string]$Repo,
   [Parameter(Mandatory=$true)][string]$Sha,
   [Parameter(Mandatory=$true)][string]$Token,
-  [int]$MinApprovals = 1
+  [int]$MinApprovals = 1,
+  [switch]$AllowSelfApproval
 )
 
 Set-StrictMode -Version Latest
@@ -89,8 +90,10 @@ foreach ($review in $reviews) {
   $reviewUser = Get-PropValue -Object $review -Name 'user'
   $reviewer = Get-PropValue -Object $reviewUser -Name 'login'
 
-  if ($state -eq "APPROVED" -and -not [string]::IsNullOrWhiteSpace($reviewer) -and $reviewer -ne $prAuthor) {
-    $approvers[$reviewer] = $true
+  if ($state -eq "APPROVED" -and -not [string]::IsNullOrWhiteSpace($reviewer)) {
+    if ($AllowSelfApproval -or $reviewer -ne $prAuthor) {
+      $approvers[$reviewer] = $true
+    }
   }
 }
 
