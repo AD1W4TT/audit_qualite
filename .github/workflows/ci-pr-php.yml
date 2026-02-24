@@ -36,16 +36,16 @@ jobs:
 
           "PHP_EXE=$phpExe" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
 
-      - shell: pwsh
+      - shell: powershell
         run: '& "$env:PHP_EXE" -v'
 
-      - shell: pwsh
+      - shell: powershell
         run: |
           if (Test-Path composer.json) {
             composer install --no-interaction --prefer-dist
           }
 
-      - shell: pwsh
+      - shell: powershell
         run: |
           $files = Get-ChildItem -Recurse -Filter *.php | Where-Object { $_.FullName -notmatch "\\vendor\\" }
           foreach ($f in $files) {
@@ -53,13 +53,14 @@ jobs:
             if ($LASTEXITCODE -ne 0) { throw "Lint error: $($f.FullName)" }
           }
 
-      - shell: pwsh
+      - shell: powershell
         run: |
           if (Test-Path vendor/bin/phpunit) {
             & "$env:PHP_EXE" vendor/bin/phpunit --colors=never
           } else {
             Write-Host "phpunit absent, tests skipped"
           }
+
 
 
 

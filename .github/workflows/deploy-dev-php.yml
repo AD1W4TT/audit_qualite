@@ -23,16 +23,20 @@ jobs:
             Write-Host "age already available"
             exit 0
           }
-          $release = Invoke-RestMethod -Uri "https://api.github.com/repos/FiloSottile/age/releases/latest"
-          $asset = $release.assets | Where-Object { $_.name -match "windows-amd64\.zip$" } | Select-Object -First 1
-          if (-not $asset) { throw "age windows asset introuvable" }
-          $zip = Join-Path $env:RUNNER_TEMP "age-windows-amd64.zip"
-          $dst = Join-Path $env:RUNNER_TEMP "age-bin"
-          Invoke-WebRequest -Uri $asset.browser_download_url -OutFile $zip
-          Expand-Archive -Path $zip -DestinationPath $dst -Force
-          $ageDir = Split-Path -Parent (Get-ChildItem -Path $dst -Recurse -Filter age.exe | Select-Object -First 1 -ExpandProperty FullName)
-          if (-not $ageDir) { throw "age.exe introuvable apres extraction" }
-          $ageDir | Out-File -FilePath $env:GITHUB_PATH -Append -Encoding utf8
+
+          $candidates = @(
+            "\\foadsysdev1p\CI\actions-runner\tools\age\age.exe",
+            "D:\CI\actions-runner\tools\age\age.exe",
+            "C:\CI\actions-runner\tools\age\age.exe"
+          )
+
+          $ageExe = $candidates | Where-Object { Test-Path $_ } | Select-Object -First 1
+          if (-not $ageExe) {
+            throw "age.exe introuvable. Attendu dans \\foadsysdev1p\CI\actions-runner\tools\age"
+          }
+
+          (Split-Path -Parent $ageExe) | Out-File -FilePath $env:GITHUB_PATH -Append -Encoding utf8
+          Write-Host "Using age from $ageExe"
       - name: Resolve AGE key path
         shell: powershell
         run: |
@@ -88,8 +92,10 @@ jobs:
 
           "STAGE_PATH=$stage" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
 
-      - shell: pwsh
+      - shell: powershell
         run: .\.ci\scripts\deploy-iis.ps1 -Source "$env:STAGE_PATH" -Target "$env:DEPLOY_TARGET" -BackupRoot "$env:DEPLOY_BACKUP" -UseAppOffline
+
+
 
 
 
