@@ -100,15 +100,35 @@ jobs:
 
           "STAGE_PATH=$stage" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
 
-      - name: Decrypt PROD config
+      - name: Prepare PROD config
         shell: powershell
         env:
           AGE_KEY_FILE: ${{ vars.AGE_KEY_FILE }}
           AGE_EXE: D:\CI\actions-runner\tools\age\age.exe
-        run: ./.ci/scripts/decrypt-age.ps1 -InputFile "./.ci/secrets/db.php.age" -OutputFile "${env:STAGE_PATH}\\api\\db.php"
+        run: |
+          $out = "${env:STAGE_PATH}\\api\\db.php"
+          $encrypted = "./.ci/secrets/db.php.age"
+          $currentProd = Join-Path "${{ vars.PROD_PHP_PATH }}" "api\\db.php"
+
+          try {
+            ./.ci/scripts/decrypt-age.ps1 -InputFile $encrypted -OutputFile $out
+            Write-Host "Config PROD decryptee depuis .age"
+          }
+          catch {
+            Write-Warning "Decrypt .age impossible: $($_.Exception.Message)"
+            if (Test-Path $currentProd) {
+              New-Item -ItemType Directory -Force -Path (Split-Path $out) | Out-Null
+              Copy-Item -Path $currentProd -Destination $out -Force
+              Write-Host "Fallback: reutilisation de la config db.php deja en production"
+            }
+            else {
+              throw "Aucune config exploitable: decrypt KO et fichier prod introuvable ($currentProd)"
+            }
+          }
 
       - shell: powershell
         run: ./.ci/scripts/deploy-iis.ps1 -Source "$env:STAGE_PATH" -Target "${{ vars.PROD_PHP_PATH }}" -BackupRoot "${{ vars.PROD_PHP_BACKUP_PATH }}" -UseAppOffline
+
 
 
 
