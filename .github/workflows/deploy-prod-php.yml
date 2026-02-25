@@ -90,8 +90,14 @@ jobs:
           $stage = Join-Path $env:RUNNER_TEMP "php-stage-prod"
           if (Test-Path $stage) { Remove-Item $stage -Recurse -Force }
           New-Item -ItemType Directory -Path $stage -Force | Out-Null
+
           robocopy "$env:GITHUB_WORKSPACE" "$stage" /MIR /XD .git .github tests .vscode .idea /XF .gitignore README.md
-          if ($LASTEXITCODE -ge 8) { throw "Staging robocopy error code $LASTEXITCODE" }
+          $rc = $LASTEXITCODE
+          if ($rc -ge 8) { throw "Staging robocopy error code $rc" }
+
+          Write-Host "Robocopy stage exit code: $rc (treated as success)"
+          $global:LASTEXITCODE = 0
+
           "STAGE_PATH=$stage" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
 
       - name: Decrypt PROD config
@@ -100,4 +106,5 @@ jobs:
 
       - shell: powershell
         run: .\scripts\deploy-iis.ps1 -Source "$env:STAGE_PATH" -Target "${{ vars.PROD_PHP_PATH }}" -BackupRoot "${{ vars.PROD_PHP_BACKUP_PATH }}" -UseAppOffline
+
 
