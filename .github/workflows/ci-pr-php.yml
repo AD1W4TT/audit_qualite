@@ -13,32 +13,62 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup PHP
-        uses: shivammathur/setup-php@v2
-        with:
-          php-version: '8.3'
-          coverage: none
-          tools: composer
-
-      - name: Show PHP version
+      - name: Resolve PHP executable
         shell: powershell
-        run: php -v
+        run: |
+          $candidates = @()
+          if ($env:PHP_EXE) { $candidates += $env:PHP_EXE }
+          $cmd = Get-Command php -ErrorAction SilentlyContinue
+          if ($cmd) { $candidates += $cmd.Source }
+          $candidates += "C:\php-8.3.30-nts-Win32-vs16-x64\php.exe"
+
+          $php = $candidates | Where-Object { $_ -and (Test-Path $_) } | Select-Object -First 1
+
+          if (-not $php) {
+            $phpRoot = Join-Path $env:RUNNER_TEMP "php-8.3.30"
+            $phpExe = Join-Path $phpRoot "php.exe"
+            if (-not (Test-Path $phpExe)) {
+              $zip = Join-Path $env:RUNNER_TEMP "php.zip"
+              Invoke-WebRequest -Uri "https://windows.php.net/downloads/releases/php-8.3.30-nts-Win32-vs16-x64.zip" -OutFile $zip
+              if (Test-Path $phpRoot) { Remove-Item $phpRoot -Recurse -Force }
+              Expand-Archive -Path $zip -DestinationPath $phpRoot -Force
+            }
+            $php = $phpExe
+          }
+
+          if (-not (Test-Path $php)) {
+            throw "PHP introuvable et installation automatique echouee."
+          }
+
+          "PHP_BIN=$php" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          & $php -v
 
       - name: Install dependencies
         shell: powershell
         run: |
-          if (Test-Path composer.json) {
-            composer install --no-interaction --prefer-dist
-          } else {
+          if (-not (Test-Path composer.json)) {
             Write-Host "composer.json absent, install skip"
+            exit 0
           }
+
+          $composerCmd = "composer"
+          $composer = Get-Command composer -ErrorAction SilentlyContinue
+          if (-not $composer) {
+            $installer = Join-Path $env:RUNNER_TEMP "composer-setup.php"
+            $composerPhar = Join-Path $env:RUNNER_TEMP "composer.phar"
+            & "$env:PHP_BIN" -r "copy('https://getcomposer.org/installer', '$installer');"
+            & "$env:PHP_BIN" $installer --quiet --install-dir $env:RUNNER_TEMP --filename composer.phar
+            $composerCmd = "`"$env:PHP_BIN`" `"$composerPhar`""
+          }
+
+          Invoke-Expression "$composerCmd install --no-interaction --prefer-dist"
 
       - name: Lint PHP files
         shell: powershell
         run: |
           $files = Get-ChildItem -Recurse -Filter *.php | Where-Object { $_.FullName -notmatch "\\vendor\\" }
           foreach ($f in $files) {
-            php -l $f.FullName
+            & "$env:PHP_BIN" -l $f.FullName
             if ($LASTEXITCODE -ne 0) { throw "Lint error: $($f.FullName)" }
           }
 
@@ -46,7 +76,7 @@ jobs:
         shell: powershell
         run: |
           if (Test-Path vendor/bin/phpunit) {
-            php vendor/bin/phpunit --colors=never
+            & "$env:PHP_BIN" vendor/bin/phpunit --colors=never
           } else {
             Write-Host "phpunit absent, tests skipped"
           }
