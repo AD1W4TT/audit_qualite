@@ -27,16 +27,16 @@ jobs:
           if ($env:PHP_EXE) { $candidates += $env:PHP_EXE }
           $cmd = Get-Command php -ErrorAction SilentlyContinue
           if ($cmd) { $candidates += $cmd.Source }
-          $candidates += "C:\php-8.3.30-nts-Win32-vs16-x64\php.exe"
+          $candidates += "C:\\php-8.3.28-nts-Win32-vs16-x64\\php.exe"
 
           $php = $candidates | Where-Object { $_ -and (Test-Path $_) } | Select-Object -First 1
 
           if (-not $php) {
-            $phpRoot = Join-Path $env:RUNNER_TEMP "php-8.3.30"
+            $phpRoot = Join-Path $env:RUNNER_TEMP "php-8.3.28"
             $phpExe = Join-Path $phpRoot "php.exe"
             if (-not (Test-Path $phpExe)) {
               $zip = Join-Path $env:RUNNER_TEMP "php.zip"
-              Invoke-WebRequest -Uri "https://windows.php.net/downloads/releases/php-8.3.30-nts-Win32-vs16-x64.zip" -OutFile $zip
+              Invoke-WebRequest -Uri "https://windows.php.net/downloads/releases/php-8.3.28-nts-Win32-vs16-x64.zip" -OutFile $zip
               if (Test-Path $phpRoot) { Remove-Item $phpRoot -Recurse -Force }
               Expand-Archive -Path $zip -DestinationPath $phpRoot -Force
             }
@@ -100,3 +100,4 @@ jobs:
 
       - shell: powershell
         run: .\scripts\deploy-iis.ps1 -Source "$env:STAGE_PATH" -Target "${{ vars.PROD_PHP_PATH }}" -BackupRoot "${{ vars.PROD_PHP_BACKUP_PATH }}" -UseAppOffline
+
