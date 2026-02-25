@@ -20,17 +20,17 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.merge_commit_sha }}
 
-      - shell: pwsh
+      - shell: powershell
         run: php -v
 
-      - shell: pwsh
+      - shell: powershell
         run: |
           if (Test-Path composer.json) {
             composer install --no-dev --no-interaction --prefer-dist --optimize-autoloader
           }
 
       - name: Verify PHP before deploy
-        shell: pwsh
+        shell: powershell
         run: |
           $files = Get-ChildItem -Recurse -Filter *.php | Where-Object { $_.FullName -notmatch "\\vendor\\" }
           foreach ($f in $files) {
@@ -44,7 +44,7 @@ jobs:
           }
 
       - name: Stage files
-        shell: pwsh
+        shell: powershell
         run: |
           $stage = Join-Path $env:RUNNER_TEMP "php-stage-prod"
           if (Test-Path $stage) { Remove-Item $stage -Recurse -Force }
@@ -54,8 +54,9 @@ jobs:
           "STAGE_PATH=$stage" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
 
       - name: Decrypt PROD config
-        shell: pwsh
+        shell: powershell
         run: .\scripts\decrypt-age.ps1 -InputFile ".\config\php\prod.local.php.age" -OutputFile "$env:STAGE_PATH\config\prod.local.php"
 
-      - shell: pwsh
+      - shell: powershell
         run: .\scripts\deploy-iis.ps1 -Source "$env:STAGE_PATH" -Target "${{ vars.PROD_PHP_PATH }}" -BackupRoot "${{ vars.PROD_PHP_BACKUP_PATH }}" -UseAppOffline
+
