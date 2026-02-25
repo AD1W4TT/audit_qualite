@@ -20,6 +20,28 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.merge_commit_sha }}
 
+      - name: Resolve deploy paths
+        shell: powershell
+        run: |
+          $target = "${{ vars.PROD_PHP_PATH }}"
+          if ([string]::IsNullOrWhiteSpace($target)) { $target = "${{ vars.PROD_PATH }}" }
+
+          $backup = "${{ vars.PROD_PHP_BACKUP_PATH }}"
+          if ([string]::IsNullOrWhiteSpace($backup)) { $backup = "${{ vars.PROD_BACKUP_PATH }}" }
+
+          if ([string]::IsNullOrWhiteSpace($target)) {
+            throw "Variable de deploiement manquante: definir PROD_PHP_PATH ou PROD_PATH"
+          }
+          if ([string]::IsNullOrWhiteSpace($backup)) {
+            throw "Variable de backup manquante: definir PROD_PHP_BACKUP_PATH ou PROD_BACKUP_PATH"
+          }
+
+          "DEPLOY_TARGET=$target" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          "DEPLOY_BACKUP_ROOT=$backup" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
+          Write-Host "Deploy target resolved: $target"
+          Write-Host "Deploy backup resolved: $backup"
+
       - name: Resolve PHP executable
         shell: powershell
         run: |
@@ -27,7 +49,7 @@ jobs:
           if ($env:PHP_EXE) { $candidates += $env:PHP_EXE }
           $cmd = Get-Command php -ErrorAction SilentlyContinue
           if ($cmd) { $candidates += $cmd.Source }
-          $candidates += "C:\\php-8.3.28-nts-Win32-vs16-x64\\php.exe"
+          $candidates += "C:\php-8.3.28-nts-Win32-vs16-x64\php.exe"
 
           $php = $candidates | Where-Object { $_ -and (Test-Path $_) } | Select-Object -First 1
 
@@ -108,7 +130,7 @@ jobs:
         run: |
           $out = "${env:STAGE_PATH}\\api\\db.php"
           $encrypted = "./.ci/secrets/db.php.age"
-          $currentProd = Join-Path "${{ vars.PROD_PHP_PATH }}" "api\\db.php"
+          $currentProd = Join-Path "$env:DEPLOY_TARGET" "api\\db.php"
 
           try {
             ./.ci/scripts/decrypt-age.ps1 -InputFile $encrypted -OutputFile $out
@@ -127,9 +149,4 @@ jobs:
           }
 
       - shell: powershell
-        run: ./.ci/scripts/deploy-iis.ps1 -Source "$env:STAGE_PATH" -Target "${{ vars.PROD_PHP_PATH }}" -BackupRoot "${{ vars.PROD_PHP_BACKUP_PATH }}" -UseAppOffline
-
-
-
-
-
+        run: ./.ci/scripts/deploy-iis.ps1 -Source "$env:STAGE_PATH" -Target "$env:DEPLOY_TARGET" -BackupRoot "$env:DEPLOY_BACKUP_ROOT" -UseAppOffline
