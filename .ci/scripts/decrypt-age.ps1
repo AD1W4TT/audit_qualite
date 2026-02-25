@@ -23,7 +23,14 @@ if ([string]::IsNullOrWhiteSpace($AgeExe) -or -not (Test-Path $AgeExe)) {
   throw "age.exe introuvable. Definir AGE_EXE ou installer age dans le PATH"
 }
 
-if ([string]::IsNullOrWhiteSpace($KeyFile)) { throw "AGE_KEY_FILE est vide" }
+# Fallback si la variable process n'est pas injectee dans le service runner.
+if ([string]::IsNullOrWhiteSpace($KeyFile)) {
+  $KeyFile = [Environment]::GetEnvironmentVariable('AGE_KEY_FILE', 'Machine')
+}
+
+if ([string]::IsNullOrWhiteSpace($KeyFile)) {
+  throw "AGE_KEY_FILE est vide (process + machine). Definir la variable machine ou vars.AGE_KEY_FILE."
+}
 if (-not (Test-Path $KeyFile)) { throw "AGE key introuvable: $KeyFile" }
 if (-not (Test-Path $InputFile)) { throw "Input introuvable: $InputFile" }
 
