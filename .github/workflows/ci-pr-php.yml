@@ -13,31 +13,24 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Resolve PHP executable
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          coverage: none
+          tools: composer
+
+      - name: Show PHP version
         shell: powershell
-        run: |
-          $candidates = @()
-          if ($env:PHP_EXE) { $candidates += $env:PHP_EXE }
-          $cmd = Get-Command php -ErrorAction SilentlyContinue
-          if ($cmd) { $candidates += $cmd.Source }
-          $candidates += "C:\php-8.3.30-nts-Win32-vs16-x64\php.exe"
-
-          $php = $candidates | Where-Object { $_ -and (Test-Path $_) } | Select-Object -First 1
-          if (-not $php) {
-            throw "PHP introuvable. Definir PHP_EXE (Repository Variable) ou installer PHP dans le PATH du runner."
-          }
-
-          "PHP_BIN=$php" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
-          & $php -v
+        run: php -v
 
       - name: Install dependencies
         shell: powershell
         run: |
-          $composer = Get-Command composer -ErrorAction SilentlyContinue
-          if ((Test-Path composer.json) -and $composer) {
+          if (Test-Path composer.json) {
             composer install --no-interaction --prefer-dist
           } else {
-            Write-Host "composer absent ou composer.json absent, install skip"
+            Write-Host "composer.json absent, install skip"
           }
 
       - name: Lint PHP files
@@ -45,7 +38,7 @@ jobs:
         run: |
           $files = Get-ChildItem -Recurse -Filter *.php | Where-Object { $_.FullName -notmatch "\\vendor\\" }
           foreach ($f in $files) {
-            & "$env:PHP_BIN" -l $f.FullName
+            php -l $f.FullName
             if ($LASTEXITCODE -ne 0) { throw "Lint error: $($f.FullName)" }
           }
 
@@ -53,7 +46,7 @@ jobs:
         shell: powershell
         run: |
           if (Test-Path vendor/bin/phpunit) {
-            & "$env:PHP_BIN" vendor/bin/phpunit --colors=never
+            php vendor/bin/phpunit --colors=never
           } else {
             Write-Host "phpunit absent, tests skipped"
           }
