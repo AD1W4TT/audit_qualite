@@ -102,10 +102,14 @@ jobs:
 
       - name: Decrypt PROD config
         shell: powershell
+        env:
+          AGE_KEY_FILE: ${{ vars.AGE_KEY_FILE }}
+          AGE_EXE: D:\CI\actions-runner\tools\age\age.exe
         run: ./.ci/scripts/decrypt-age.ps1 -InputFile "./.ci/secrets/db.php.age" -OutputFile "${env:STAGE_PATH}\\api\\db.php"
 
       - shell: powershell
         run: ./.ci/scripts/deploy-iis.ps1 -Source "$env:STAGE_PATH" -Target "${{ vars.PROD_PHP_PATH }}" -BackupRoot "${{ vars.PROD_PHP_BACKUP_PATH }}" -UseAppOffline
+
 
 
 
