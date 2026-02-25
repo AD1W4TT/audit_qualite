@@ -20,13 +20,31 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.merge_commit_sha }}
 
-      - shell: powershell
-        run: php -v
-
-      - shell: powershell
+      - name: Resolve PHP executable
+        shell: powershell
         run: |
-          if (Test-Path composer.json) {
+          $candidates = @()
+          if ($env:PHP_EXE) { $candidates += $env:PHP_EXE }
+          $cmd = Get-Command php -ErrorAction SilentlyContinue
+          if ($cmd) { $candidates += $cmd.Source }
+          $candidates += "C:\php-8.3.30-nts-Win32-vs16-x64\php.exe"
+
+          $php = $candidates | Where-Object { $_ -and (Test-Path $_) } | Select-Object -First 1
+          if (-not $php) {
+            throw "PHP introuvable. Definir PHP_EXE (Repository Variable) ou installer PHP dans le PATH du runner."
+          }
+
+          "PHP_BIN=$php" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          & $php -v
+
+      - name: Install production dependencies
+        shell: powershell
+        run: |
+          $composer = Get-Command composer -ErrorAction SilentlyContinue
+          if ((Test-Path composer.json) -and $composer) {
             composer install --no-dev --no-interaction --prefer-dist --optimize-autoloader
+          } else {
+            Write-Host "composer absent ou composer.json absent, install skip"
           }
 
       - name: Verify PHP before deploy
@@ -34,11 +52,11 @@ jobs:
         run: |
           $files = Get-ChildItem -Recurse -Filter *.php | Where-Object { $_.FullName -notmatch "\\vendor\\" }
           foreach ($f in $files) {
-            php -l $f.FullName
+            & "$env:PHP_BIN" -l $f.FullName
             if ($LASTEXITCODE -ne 0) { throw "Lint error: $($f.FullName)" }
           }
           if (Test-Path vendor/bin/phpunit) {
-            php vendor/bin/phpunit --colors=never
+            & "$env:PHP_BIN" vendor/bin/phpunit --colors=never
           } else {
             Write-Host "phpunit absent, tests skipped"
           }
@@ -59,4 +77,3 @@ jobs:
 
       - shell: powershell
         run: .\scripts\deploy-iis.ps1 -Source "$env:STAGE_PATH" -Target "${{ vars.PROD_PHP_PATH }}" -BackupRoot "${{ vars.PROD_PHP_BACKUP_PATH }}" -UseAppOffline
-
