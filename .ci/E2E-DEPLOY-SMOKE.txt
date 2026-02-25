@@ -1,3 +1,0 @@
-﻿# CI/CD E2E Smoke
-date=2026-02-25 10:37:12
-objectif=valider PR->merge->deploy
