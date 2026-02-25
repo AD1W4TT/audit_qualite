@@ -1,0 +1,39 @@
+﻿name: ci-pr-php
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  lint-test:
+    runs-on: [self-hosted, windows, iis-prod]
+    steps:
+      - uses: actions/checkout@v4
+
+      - shell: pwsh
+        run: php -v
+
+      - shell: pwsh
+        run: |
+          if (Test-Path composer.json) {
+            composer install --no-interaction --prefer-dist
+          }
+
+      - shell: pwsh
+        run: |
+          $files = Get-ChildItem -Recurse -Filter *.php | Where-Object { $_.FullName -notmatch "\\vendor\\" }
+          foreach ($f in $files) {
+            php -l $f.FullName
+            if ($LASTEXITCODE -ne 0) { throw "Lint error: $($f.FullName)" }
+          }
+
+      - shell: pwsh
+        run: |
+          if (Test-Path vendor/bin/phpunit) {
+            php vendor/bin/phpunit --colors=never
+          } else {
+            Write-Host "phpunit absent, tests skipped"
+          }

@@ -1,0 +1,61 @@
+﻿name: deploy-prod-php
+on:
+  pull_request:
+    types: [closed]
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-prod-php
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    if: github.event.pull_request.merged == true
+    runs-on: [self-hosted, windows, iis-prod]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.merge_commit_sha }}
+
+      - shell: pwsh
+        run: php -v
+
+      - shell: pwsh
+        run: |
+          if (Test-Path composer.json) {
+            composer install --no-dev --no-interaction --prefer-dist --optimize-autoloader
+          }
+
+      - name: Verify PHP before deploy
+        shell: pwsh
+        run: |
+          $files = Get-ChildItem -Recurse -Filter *.php | Where-Object { $_.FullName -notmatch "\\vendor\\" }
+          foreach ($f in $files) {
+            php -l $f.FullName
+            if ($LASTEXITCODE -ne 0) { throw "Lint error: $($f.FullName)" }
+          }
+          if (Test-Path vendor/bin/phpunit) {
+            php vendor/bin/phpunit --colors=never
+          } else {
+            Write-Host "phpunit absent, tests skipped"
+          }
+
+      - name: Stage files
+        shell: pwsh
+        run: |
+          $stage = Join-Path $env:RUNNER_TEMP "php-stage-prod"
+          if (Test-Path $stage) { Remove-Item $stage -Recurse -Force }
+          New-Item -ItemType Directory -Path $stage -Force | Out-Null
+          robocopy "$env:GITHUB_WORKSPACE" "$stage" /MIR /XD .git .github tests .vscode .idea /XF .gitignore README.md
+          if ($LASTEXITCODE -ge 8) { throw "Staging robocopy error code $LASTEXITCODE" }
+          "STAGE_PATH=$stage" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
+      - name: Decrypt PROD config
+        shell: pwsh
+        run: .\scripts\decrypt-age.ps1 -InputFile ".\config\php\prod.local.php.age" -OutputFile "$env:STAGE_PATH\config\prod.local.php"
+
+      - shell: pwsh
+        run: .\scripts\deploy-iis.ps1 -Source "$env:STAGE_PATH" -Target "${{ vars.PROD_PHP_PATH }}" -BackupRoot "${{ vars.PROD_PHP_BACKUP_PATH }}" -UseAppOffline
