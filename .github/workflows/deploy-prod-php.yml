@@ -102,9 +102,10 @@ jobs:
 
       - name: Decrypt PROD config
         shell: powershell
-        run: .\scripts\decrypt-age.ps1 -InputFile ".\config\php\prod.local.php.age" -OutputFile "$env:STAGE_PATH\config\prod.local.php"
+        run: ./.ci/scripts/decrypt-age.ps1 -InputFile "./.ci/secrets/db.php.age" -OutputFile "${env:STAGE_PATH}\\api\\db.php"
 
       - shell: powershell
-        run: .\scripts\deploy-iis.ps1 -Source "$env:STAGE_PATH" -Target "${{ vars.PROD_PHP_PATH }}" -BackupRoot "${{ vars.PROD_PHP_BACKUP_PATH }}" -UseAppOffline
+        run: ./.ci/scripts/deploy-iis.ps1 -Source "$env:STAGE_PATH" -Target "${{ vars.PROD_PHP_PATH }}" -BackupRoot "${{ vars.PROD_PHP_BACKUP_PATH }}" -UseAppOffline
+
 
 
